@@ -71,9 +71,11 @@ body.has-towns .leaflet-top.leaflet-left { top: 44px; }
 body.intro #caption, body.intro #point-arrow { display: none; }
 
 /* arrow pointing at the budget slider (pick state) */
+/* lives inside the budget block, so it follows the slider when the panel scrolls */
+#budget-block { position: relative; }
 #point-arrow {
-  position: fixed; right: calc(var(--panel-w) + 6px); z-index: 1200; color: var(--accent);
-  font-size: 26px; animation: nudge 1.2s ease-in-out infinite;
+  position: absolute; left: -19px; top: 34px; z-index: 5; color: var(--accent);
+  font-size: 19px; line-height: 1; animation: nudge 1.2s ease-in-out infinite;
 }
 #point-arrow[hidden] { display: none; }
 @keyframes nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(8px); } }

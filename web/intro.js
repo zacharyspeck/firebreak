@@ -119,6 +119,7 @@
     waitFor(appReady, 12000, () => {
       const appIntro = document.getElementById('intro');
       if (appIntro) appIntro.click();
+      try { window._fb.audio.setCrawlBed(true); } catch (e) { /* no audio */ }
       startCrawl();
     });
   }
@@ -211,6 +212,7 @@
     if (handedOff) return;
     handedOff = true;
     clearTimers();
+    try { window._fb.audio.setCrawlBed(false); } catch (e) { /* no audio */ }
     const crawl = document.getElementById('fb-crawl');
     if (crawl) crawl.remove();
     const skip = document.getElementById('fb-skip');

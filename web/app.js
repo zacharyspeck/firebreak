@@ -418,7 +418,7 @@ function rasterizeBreaks(breaksFC, meta) {
 /* Fire crackle, synthesized — filtered brown-noise bed + random short bandpassed
    impulses. Level tracks the active front size. Must never throw. */
 function makeAudio() {
-  let ctx = null, master = null, muted = false, level = 0;
+  let ctx = null, master = null, muted = false, level = 0, crawlGain = null;
   function start() {
     if (ctx) return;
     try {
@@ -441,29 +441,40 @@ function makeAudio() {
       const bed = ctx.createGain(); bed.gain.value = 0.7;
       src.connect(lp); lp.connect(bed); bed.connect(master);
       src.start();
+      // crawl bed: the same noise, darker, on its own gain straight to the output
+      const csrc = ctx.createBufferSource(); csrc.buffer = buf; csrc.loop = true;
+      const clp = ctx.createBiquadFilter(); clp.type = 'lowpass'; clp.frequency.value = 180;
+      crawlGain = ctx.createGain(); crawlGain.gain.value = 0;
+      csrc.connect(clp); clp.connect(crawlGain); crawlGain.connect(ctx.destination);
+      csrc.start();
+      // dense, quiet crackle mixed under the bed
       setInterval(() => {
         try {
           if (!ctx || muted || level < 0.02) return;
-          const n = 1 + Math.floor(Math.random() * 3 * level + 2 * level);
+          const n = 2 + Math.floor(Math.random() * 5 * level + 3 * level);
           for (let k = 0; k < n; k++) crackle();
         } catch (e) { /* audio must never break the page */ }
-      }, 90);
+      }, 45);
     } catch (e) { ctx = null; }
   }
   function crackle() {
-    const dur = 0.02 + Math.random() * 0.05;
+    // short ticks, not slaps: under 40 ms, 2 to 6 kHz, low amplitude
+    const dur = 0.012 + Math.random() * 0.026;
     const len = Math.max(8, (ctx.sampleRate * dur) | 0);
     const b = ctx.createBuffer(1, len, ctx.sampleRate);
     const ch = b.getChannelData(0);
-    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    for (let i = 0; i < len; i++) {
+      const f = 1 - i / len;
+      ch[i] = (Math.random() * 2 - 1) * f * f;
+    }
     const s = ctx.createBufferSource(); s.buffer = b;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass';
-    bp.frequency.value = 900 + Math.random() * 3200; bp.Q.value = 1 + Math.random() * 4;
+    bp.frequency.value = 2000 + Math.random() * 4000; bp.Q.value = 2 + Math.random() * 3;
     const g = ctx.createGain();
-    g.gain.setValueAtTime((0.15 + Math.random() * 0.5) * level, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    g.gain.setValueAtTime((0.02 + Math.random() * 0.07) * level, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0005, ctx.currentTime + dur);
     s.connect(bp); bp.connect(g); g.connect(master);
-    s.start(); s.stop(ctx.currentTime + dur + 0.02);
+    s.start(); s.stop(ctx.currentTime + dur + 0.01);
   }
   function setLevel(x) {
     level = x;
@@ -473,13 +484,25 @@ function makeAudio() {
       master.gain.linearRampToValueAtTime(Math.min(0.5, x * 0.5), ctx.currentTime + 0.15);
     } catch (e) { /* ignore */ }
   }
+  function setCrawlBed(on) {
+    if (!ctx || !crawlGain) return;
+    try {
+      crawlGain.gain.cancelScheduledValues(ctx.currentTime);
+      crawlGain.gain.setValueAtTime(crawlGain.gain.value, ctx.currentTime);
+      // slow 8 s swell in, 1.5 s fade out at handoff
+      crawlGain.gain.linearRampToValueAtTime(on && !muted ? 0.14 : 0, ctx.currentTime + (on ? 8 : 1.5));
+    } catch (e) { /* ignore */ }
+  }
   function toggleMute() {
     muted = !muted;
     if (!ctx) return muted;
-    try { master.gain.value = muted ? 0 : Math.min(0.5, level * 0.5); } catch (e) { /* ignore */ }
+    try {
+      master.gain.value = muted ? 0 : Math.min(0.5, level * 0.5);
+      if (muted && crawlGain) crawlGain.gain.value = 0;
+    } catch (e) { /* ignore */ }
     return muted;
   }
-  return { start, setLevel, toggleMute, isMuted: () => muted, isActive: () => !!ctx };
+  return { start, setLevel, setCrawlBed, toggleMute, isMuted: () => muted, isActive: () => !!ctx };
 }
 
 /* Inline SVG: step curve of cumulative cost vs cumulative homes saved (curve.json),
@@ -869,6 +892,7 @@ async function main() {
   let chart = buildCurve(curvePoints());
   const waffle = buildWaffle(nB);
   const audio = makeAudio();
+  window._fb.audio = audio;      // intro.js drives the crawl bed through this
   const state = { t: 0, budget: 0, step: 0, arrival: baseGrid };
   let maxFresh = 1;
   let flow = 'armed';   // walkthrough state (see setWalk)
@@ -904,7 +928,9 @@ async function main() {
     lastCounts = { hit, saved };
     const fresh = fire.draw(arrival, t);
     maxFresh = Math.max(maxFresh, fresh);
-    audio.setLevel(fresh / maxFresh);
+    // crackle only while the front is actively spreading during playback;
+    // scrubbing or slider changes render once with no timer and stay silent
+    audio.setLevel(timer && fresh > 0 ? fresh / maxFresh : 0);
     waffle.draw(hit, saved);
     updateStats();
     $('time-label').textContent = fmtTime(t);
@@ -1025,11 +1051,7 @@ async function main() {
     if (btn) capBtn.textContent = btn;
   }
   function pointAtBudget(on) {
-    arrowEl.hidden = !on;
-    if (on) {
-      const r = $('budget-block').getBoundingClientRect();
-      arrowEl.style.top = `${r.top + 26}px`;
-    }
+    arrowEl.hidden = !on;   // positioned by CSS inside the budget block itself
   }
   function setWalk(f) {
     flow = f;
