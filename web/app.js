@@ -1047,7 +1047,8 @@ async function main() {
       const st = stepInfo(state.step);
       const mb = st.minutesBought == null ? '—' : Math.round(st.minutesBought);
       setCaption(`${fmtMoney(st.cost)} · ${lastCounts.saved.toLocaleString()} homes saved · ` +
-        `${mb} minutes of evacuation time bought.`, 'Try another budget');
+        `${mb} minutes of evacuation time bought.`,
+        sim ? 'Start your own fire' : 'Try another budget');
     }
     if (f === 'free') setCaption(null, null);
     updateStats();
@@ -1068,8 +1069,10 @@ async function main() {
     if (flow === 'scenario') { state.t = 0; timeEl.value = '0'; render(); startPlay(); return; }
     if (flow === 'armed') { setWalk('burn0'); startPlay(); }
     else if (flow === 'pick') { setWalk('burn1'); state.t = 0; timeEl.value = '0'; render(); startPlay(); }
-    else if (flow === 'done') { setWalk('pick'); setCaption(
-      `Drag the budget slider, then run it again.`, 'Run it again →'); }
+    else if (flow === 'done') {
+      if (sim) { enterSandbox(); }
+      else { setWalk('pick'); setCaption('Drag the budget slider, then run it again.', 'Run it again →'); }
+    }
   };
   $('caption-skip').onclick = e => { e.stopPropagation(); setWalk('free'); };
 
@@ -1112,6 +1115,23 @@ async function main() {
     setBudgetValue(state.budget, true);
     setWalk('scenario');
   }
+  /* A clean sandbox: no historical fire on screen, no ghost, no breaks. The map
+     stays where it is, the wind sliders stay live, and the next click ignites. */
+  function enterSandbox() {
+    if (timer) stopPlay();
+    scenario = null; scenGrids = []; scenStats = [];
+    if (typeof drawnCells !== 'undefined') { drawnCells.clear(); $('draw-clear').hidden = true; }
+    baseGrid = histBase;
+    dropGhost();
+    setPicking(false);
+    state.t = 0; timeEl.value = '0';
+    budgetEl.value = '0';
+    setBudgetValue(0, true);           // empties the break mask
+    $('scenario-value').textContent = 'Your fire';
+    windLabels();
+    setWalk('free');
+    setCaption('Click anywhere to start a fire.', null);
+  }
   function resetScenario() {
     if (timer) stopPlay();
     scenario = null; scenGrids = []; scenStats = [];
@@ -1146,7 +1166,10 @@ async function main() {
     wsEl.value = String(wind.speed_mph); wdEl.value = String(wind.from_deg);
     windLabels();
     igniteBtn.onclick = () => setPicking(!picking);
-    resetBtn.onclick = resetScenario;
+    // Reset: a clean sandbox at any point. Historical fire, ghost and every break
+    // are cleared, the map stays put, and the next click ignites.
+    resetBtn.hidden = false;
+    resetBtn.onclick = () => enterSandbox();
     map.on('click', e => {
       if (drawMode) return;                    // drawing owns the mouse
       // once the story is over, any click in the region ignites; during the
