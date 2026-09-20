@@ -263,3 +263,13 @@ his own controls:
 `?intro=0` disables the overlay entirely, so his own tests and flows are untouched.
 Deliberately **not** used for handoff: his `#caption-skip`, which jumps to free play
 and would skip the story.
+
+## Final pass, item 1: re-ignite loop
+
+Could not reproduce on HEAD: the click, run, Reset, click-elsewhere loop was
+verified headlessly three consecutive times at three different points (9,300 /
+5,418 / 3,088 homes hit), plus the story-end entry, Reset mid-play, rapid
+double-click, and wind-change-then-click paths. All land in a working scenario
+with zero console errors. The defect matched the state handling that the
+previous pass's enterSandbox replaced, so the fix already shipped; this item is
+recorded as verification rather than a second fix.
