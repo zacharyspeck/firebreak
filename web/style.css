@@ -324,6 +324,4 @@ body.intro .leaflet-control-container, body.intro .ign { display: none; }
 }
 .reset-view:hover { border-color: rgba(255, 255, 255, .3); }
 
-/* draw-a-break: the map is a drafting surface while active */
-body.drawing #map, body.drawing .leaflet-grab, body.drawing .leaflet-interactive { cursor: crosshair; }
-.scenario-row { flex-wrap: wrap; }
+#next-note { margin: 10px 0 0; font-size: 12px; color: var(--dim); }

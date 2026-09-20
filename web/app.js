@@ -809,23 +809,6 @@ async function main() {
         breakEdge[c] = e;
       }
     }
-    applyDrawn();
-  }
-  // Hand-drawn breaks ride on top of whatever the budget bought, in the same mask,
-  // so they render and simulate exactly like the solver's.
-  const drawnCells = new Set();
-  function applyDrawn() {
-    if (!drawnCells.size) return;
-    for (const c of drawnCells) breakMask[c] = 1;
-    for (const c of drawnCells) {
-      const r = (c / cols) | 0, cc = c % cols;
-      let e = 0;
-      if (r === 0 || !breakMask[c - cols]) e |= 1;
-      if (r === rows - 1 || !breakMask[c + cols]) e |= 2;
-      if (cc === 0 || !breakMask[c - 1]) e |= 4;
-      if (cc === cols - 1 || !breakMask[c + 1]) e |= 8;
-      breakEdge[c] = e;
-    }
   }
 
   // Grids: step 0 = baseline (uint16 from baseline.json); later steps decode their
@@ -1142,7 +1125,6 @@ async function main() {
   function enterSandbox() {
     if (timer) stopPlay();
     scenario = null; scenGrids = []; scenStats = [];
-    if (typeof drawnCells !== 'undefined') { drawnCells.clear(); $('draw-clear').hidden = true; }
     baseGrid = histBase;
     dropGhost();
     setPicking(false);
@@ -1193,7 +1175,6 @@ async function main() {
     resetBtn.hidden = false;
     resetBtn.onclick = () => enterSandbox();
     map.on('click', e => {
-      if (drawMode) return;                    // drawing owns the mouse
       // once the story is over, any click in the region ignites; during the
       // story the button (or picking mode) is still required
       const storyOver = flow === 'done' || flow === 'free' || flow === 'scenario';
@@ -1221,107 +1202,9 @@ async function main() {
     };
     wsEl.oninput = onWind; wdEl.oninput = onWind;
     document.addEventListener('keydown', e => {
-      if (e.key !== 'Escape') return;
-      if (picking) setPicking(false);
-      if (drawMode) setDrawMode(false);
+      if (e.key === 'Escape' && picking) setPicking(false);
     });
 
-    // --- draw a break: drag a line, cells within one cell of it are cleared ---
-    const drawBtn = $('draw-btn'), drawClear = $('draw-clear');
-    const fuelCls = (() => {          // fuel class per cell, for cost and clearability
-      const bin = atob(physics.fuel_class_b64);
-      const out = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-      return out;
-    })();
-    const COST_KEY = [null, 'grass', 'shrub', 'shrub', 'timber', 'timber', 'timber', null];
-    let drawMode = false, drawPath = null;
-    function setDrawMode(on) {
-      drawMode = on;
-      document.body.classList.toggle('drawing', on);
-      drawBtn.textContent = on ? 'Drag on the map…' : 'Draw a break';
-      if (on && picking) setPicking(false);
-    }
-    function drawnCost() {
-      let total = 0;
-      for (const c of drawnCells) {
-        const key = COST_KEY[fuelCls[c]];
-        if (key) total += physics.cell_acres * (physics.cost_per_acre[key] || 0);
-      }
-      return Math.round(total);
-    }
-    function fracRC(latlng) {
-      const fyF = (yN - merc(latlng.lat)) / (yN - yS);
-      const fxF = (latlng.lng - b.west) / (b.east - b.west);
-      if (fxF < 0 || fxF >= 1 || fyF < 0 || fyF >= 1) return null;
-      return [fyF * rows, fxF * cols];
-    }
-    function commitPath(path) {
-      let added = 0;
-      for (let s = 0; s < path.length - 1; s++) {
-        const a = path[s], z = path[s + 1];
-        const steps = Math.max(1, Math.ceil(Math.hypot(z[0] - a[0], z[1] - a[1]) * 2));
-        for (let k = 0; k <= steps; k++) {
-          const r = a[0] + (z[0] - a[0]) * k / steps;
-          const c = a[1] + (z[1] - a[1]) * k / steps;
-          for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-            const rr = Math.round(r) + dr, cc = Math.round(c) + dc;
-            if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
-            if (Math.hypot(rr - r, cc - c) > 1.0) continue;   // two-cell width
-            const idx = rr * cols + cc;
-            if (!COST_KEY[fuelCls[idx]] || sim.base[idx] <= 0) continue;  // not clearable
-            if (!drawnCells.has(idx)) { drawnCells.add(idx); added++; }
-          }
-        }
-      }
-      return added;
-    }
-    function reRunDrawn() {
-      // drawn lines only exist in the live sim, so force a scenario run
-      if (!scenario) scenario = { cell: histIgnCell, wind };
-      applyScenario();
-      // marginal value of the lines: same fire with and without them
-      const withoutMask = breakMask.slice();
-      for (const c of drawnCells) withoutMask[c] = 0;
-      const hitOf = mask => {
-        const arr = sim.toU16(sim.run(scenario.cell, mask));
-        let h = 0;
-        for (let i = 0; i < nB; i++) if (arr[cells[i]] <= H) h++;
-        return h;
-      };
-      const saved = drawnCells.size ? Math.max(0, hitOf(withoutMask) - hitOf(breakMask)) : 0;
-      drawClear.hidden = drawnCells.size === 0;
-      $('scenario-note').textContent = drawnCells.size
-        ? `Your lines: ${saved.toLocaleString()} homes saved. Cost ${fmtMoney(drawnCost())}.`
-        : 'Click the map to start a fire, or change the wind. The fire is re-simulated live against the breaks bought at this budget.';
-    }
-    drawBtn.onclick = () => setDrawMode(!drawMode);
-    drawClear.onclick = () => {
-      drawnCells.clear();
-      drawClear.hidden = true;
-      if (!scenario) scenario = { cell: histIgnCell, wind };
-      applyScenario();
-      $('scenario-note').textContent = 'Lines cleared.';
-    };
-    map.on('mousedown', e => {
-      if (!drawMode) return;
-      const rc = fracRC(e.latlng);
-      if (!rc) return;
-      drawPath = [rc];
-      map.dragging.disable();
-    });
-    map.on('mousemove', e => {
-      if (!drawPath) return;
-      const rc = fracRC(e.latlng);
-      if (rc) drawPath.push(rc);
-    });
-    map.on('mouseup', () => {
-      if (!drawPath) return;
-      const path = drawPath;
-      drawPath = null;
-      map.dragging.enable();
-      if (path.length >= 2 && commitPath(path)) reRunDrawn();
-    });
   }
 
   // --- plan toggle: robust (default) vs historical-only breaks ---
