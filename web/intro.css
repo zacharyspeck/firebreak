@@ -74,6 +74,7 @@
 /* while the opening runs, the app underneath is live but out of sight */
 body.fb-crawl #panel, body.fb-crawl #caption, body.fb-crawl #legend,
 body.fb-crawl #town-select, body.fb-crawl .leaflet-control-container,
-body.fb-crawl #point-arrow, body.fb-crawl #break-tip { display: none !important; }
+body.fb-crawl #point-arrow, body.fb-crawl #break-tip,
+body.fb-crawl .ign, body.fb-crawl .reset-view { display: none !important; }
 body.fb-crawl #map { inset: 0 !important; }
 body.fb-intro #intro { display: none !important; }   /* his title card stays unused */

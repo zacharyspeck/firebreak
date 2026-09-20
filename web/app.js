@@ -700,7 +700,23 @@ async function main() {
     `<span class="chip"><i style="background:${g.color}"></i>${g.group}</span>`).join('');
   $('simp-list').innerHTML = meta.simplifications.map(s => `<li>${s}</li>`).join('');
 
-  const map = L.map('map', { zoomSnap: 0.25, maxZoom: 17 });
+  const map = L.map('map', {
+    zoomSnap: 0.25, minZoom: 5, maxZoom: 17,
+    wheelPxPerZoomLevel: 42, wheelDebounceTime: 12,   // faster, smoother wheel
+  });
+  // small "Reset view" that flies back to the town
+  const ResetView = L.Control.extend({
+    options: { position: 'topleft' },
+    onAdd() {
+      const el = L.DomUtil.create('button', 'reset-view');
+      el.type = 'button';
+      el.textContent = 'Reset view';
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.on(el, 'click', () => map.flyToBounds(bounds, { padding: [10, 10], duration: 1.2 }));
+      return el;
+    },
+  });
+  map.addControl(new ResetView());
   map.fitBounds(bounds, { padding: [10, 10] });
   map.createPane('fire').style.zIndex = 405;
   window._fb = { map };   // debug/test handle
@@ -1059,7 +1075,7 @@ async function main() {
   function setPicking(on) {
     picking = on;
     document.body.classList.toggle('picking', on);
-    igniteBtn.textContent = on ? 'Click the map…' : 'Start a fire anywhere';
+    igniteBtn.textContent = on ? 'Click the map…' : 'Start your own fire';
   }
   function applyScenario() {
     if (timer) stopPlay();
@@ -1115,7 +1131,10 @@ async function main() {
     igniteBtn.onclick = () => setPicking(!picking);
     resetBtn.onclick = resetScenario;
     map.on('click', e => {
-      if (!picking) return;
+      // once the story is over, any click in the region ignites; during the
+      // story the button (or picking mode) is still required
+      const storyOver = flow === 'done' || flow === 'free' || flow === 'scenario';
+      if (!picking && !storyOver) return;
       const fyF = (yN - merc(e.latlng.lat)) / (yN - yS);
       const fxF = (e.latlng.lng - b.west) / (b.east - b.west);
       if (fxF < 0 || fxF >= 1 || fyF < 0 || fyF >= 1) return;

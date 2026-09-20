@@ -40,7 +40,7 @@
         '<filter id="fb-heat" x="-20%" y="-20%" width="140%" height="140%">' +
           '<feTurbulence id="fb-heat-turb" type="fractalNoise" baseFrequency="0.011 0.026"' +
           ' numOctaves="2" seed="2" result="noise"/>' +
-          '<feDisplacementMap in="SourceGraphic" in2="noise" scale="22"' +
+          '<feDisplacementMap id="fb-heat-disp" in="SourceGraphic" in2="noise" scale="34"' +
           ' xChannelSelector="R" yChannelSelector="G"/>' +
         '</filter>' +
       '</svg>' +
@@ -78,14 +78,19 @@
     const turb = document.getElementById('fb-heat-turb');
     const card = document.getElementById('fb-intro');
     if (!turb || !card) return;
+    const disp = document.getElementById('fb-heat-disp');
     let t = 0;
     const tick = () => {
       if (!card.isConnected || card.classList.contains('gone')) return;
       t += 1;
-      turb.setAttribute('seed', String(2 + ((t / 7) | 0) % 64));
-      const fx = 0.011 + Math.sin(t / 95) * 0.0035;
-      const fy = 0.026 + Math.cos(t / 71) * 0.008;
+      // new noise every 3rd frame, frequency breathing on a slow sine: the red
+      // edge visibly ripples while the white word stays untouched
+      turb.setAttribute('seed', String(2 + ((t / 3) | 0) % 128));
+      const s = Math.sin(t / 60);
+      const fx = 0.009 + (s + 1) * 0.5 * (0.018 - 0.009);        // 0.009..0.018
+      const fy = 0.020 + (Math.cos(t / 47) + 1) * 0.5 * 0.016;   // 0.020..0.036
       turb.setAttribute('baseFrequency', fx.toFixed(5) + ' ' + fy.toFixed(5));
+      if (disp) disp.setAttribute('scale', (34 + s * 6).toFixed(1));
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);

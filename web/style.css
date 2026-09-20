@@ -176,7 +176,6 @@ body:not([data-flow="pick"]):not([data-flow="done"]):not([data-flow="free"]):not
 }
 body:not([data-flow="free"]):not([data-flow="scenario"]) #time-block,
 body:not([data-flow="free"]):not([data-flow="scenario"]) #explore,
-body:not([data-flow="done"]):not([data-flow="free"]):not([data-flow="scenario"]) #scenario-block,
 body:not([data-flow="done"]):not([data-flow="free"]):not([data-flow="scenario"]) #plan-block {
   opacity: .35; pointer-events: none;
 }
@@ -313,3 +312,12 @@ body.intro .leaflet-control-container, body.intro .ign { display: none; }
   font-size: 10px;
 }
 .leaflet-control-attribution a { color: var(--dim); }
+
+/* Reset view: under the zoom control */
+.reset-view {
+  display: block; margin-top: 6px; padding: 6px 9px; cursor: pointer;
+  background: rgba(10, 10, 10, .9); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+  font: 500 11px/1 var(--sans); letter-spacing: -.01em;
+}
+.reset-view:hover { border-color: rgba(255, 255, 255, .3); }
